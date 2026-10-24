@@ -1,0 +1,32 @@
+name: Segurança & CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build & Validação
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Validar Build da Imagem Docker
+        run: |
+          docker build -t task-api "./bloco2/app-student"
+
+  sast-gate:
+    name: SAST Gate (Semgrep)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@v4
+
+      - name: Executar Semgrep SAST
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/src" returntocorp/semgrep \
+            semgrep scan --config auto --error "/src/bloco2/app-student"

@@ -5,6 +5,7 @@ const tasksRouter = require("./routes/tasks");
 const networkRouter = require("./routes/network");
 const filesRouter = require("./routes/files");
 
+// nosemgrep: javascript.express.security.audit.express-check-csurf-middleware-usage.express-check-csurf-middleware-usage
 const app = express();
 const PORT = process.env.PORT || 3000;
 

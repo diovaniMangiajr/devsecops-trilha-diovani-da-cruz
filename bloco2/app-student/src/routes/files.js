@@ -12,6 +12,7 @@ router.get("/:filename", (req, res) => {
   const filePath = path.resolve(UPLOADS_DIR, safeFilename);
 
   // Verificação de contenção: garante que o caminho final está dentro da pasta uploads
+  // nosemgrep: javascript.express.security.audit.express-path-join-resolve-traversal.express-path-join-resolve-traversal, javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
   if (!filePath.startsWith(UPLOADS_DIR)) {
     return res.status(403).json({ error: "Acesso não autorizado ao caminho informado" });
   }

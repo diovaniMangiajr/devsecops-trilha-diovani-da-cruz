@@ -9,4 +9,7 @@ COPY . .
 
 EXPOSE 3000
 
+# Define usuario sem privilegios de root para execucao segura do container
+USER node
+
 CMD ["node", "src/server.js"]

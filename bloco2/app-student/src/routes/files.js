@@ -3,11 +3,18 @@ const router = express.Router();
 const fs = require("fs");
 const path = require("path");
 
-const UPLOADS_DIR = path.join(__dirname, "..", "..", "uploads");
+const UPLOADS_DIR = path.resolve(__dirname, "..", "..", "uploads");
 
 // GET /api/files/:filename - lê e devolve o conteúdo de um arquivo da pasta uploads/
 router.get("/:filename", (req, res) => {
-  const filePath = path.join(UPLOADS_DIR, req.params.filename);
+  // path.basename descarta qualquer prefixo de diretório malicioso (ex: ../../etc/passwd vira passwd)
+  const safeFilename = path.basename(req.params.filename);
+  const filePath = path.resolve(UPLOADS_DIR, safeFilename);
+
+  // Verificação de contenção: garante que o caminho final está dentro da pasta uploads
+  if (!filePath.startsWith(UPLOADS_DIR)) {
+    return res.status(403).json({ error: "Acesso não autorizado ao caminho informado" });
+  }
 
   fs.readFile(filePath, "utf8", (err, data) => {
     if (err) return res.status(404).json({ error: "Arquivo não encontrado" });

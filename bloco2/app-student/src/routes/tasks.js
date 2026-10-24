@@ -7,13 +7,22 @@ router.get("/", (req, res) => {
   res.json(db.listTasks());
 });
 
-// GET /api/tasks/filter?expr=<expressão> - filtro avançado de tarefas
+// GET /api/tasks/filter?expr=<expressão> - filtro seguro de tarefas
 router.get("/filter", (req, res) => {
   const { expr } = req.query;
   if (!expr) return res.status(400).json({ error: "Parâmetro 'expr' é obrigatório" });
+
   try {
     const tasks = db.listTasks();
-    const result = tasks.filter((t) => eval(expr));
+    const search = String(expr).toLowerCase();
+    
+    // Filtro seguro por correspondência de string, eliminando execução dinâmica
+    const result = tasks.filter(
+      (t) =>
+        t.title.toLowerCase().includes(search) ||
+        t.owner.toLowerCase().includes(search)
+    );
+
     res.json(result);
   } catch (err) {
     res.status(400).json({ error: "Expressão inválida", details: err.message });
@@ -35,7 +44,7 @@ router.post("/", (req, res) => {
   res.status(201).json(task);
 });
 
-// PATCH /api/tasks/:id - atualiza uma tarefa (ex: marcar como concluída)
+// PATCH /api/tasks/:id - atualiza uma tarefa
 router.patch("/:id", (req, res) => {
   const task = db.updateTask(req.params.id, req.body);
   if (!task) return res.status(404).json({ error: "Tarefa não encontrada" });

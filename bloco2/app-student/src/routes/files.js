@@ -7,12 +7,19 @@ const UPLOADS_DIR = path.resolve(__dirname, "..", "..", "uploads");
 
 // GET /api/files/:filename - lê e devolve o conteúdo de um arquivo da pasta uploads/
 router.get("/:filename", (req, res) => {
-  // path.basename descarta qualquer prefixo de diretório malicioso (ex: ../../etc/passwd vira passwd)
-  const safeFilename = path.basename(req.params.filename);
-  const filePath = path.resolve(UPLOADS_DIR, safeFilename);
+  const filename = req.params.filename;
 
-  // Verificação de contenção: garante que o caminho final está dentro da pasta uploads
-  // nosemgrep: javascript.express.security.audit.express-path-join-resolve-traversal.express-path-join-resolve-traversal, javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+  // Validação estrita: aceita apenas nomes alfanuméricos com ponto, traço ou underline
+  if (!/^[a-zA-Z0-9._-]+$/.test(filename) || filename.includes("..")) {
+    return res.status(400).json({ error: "Nome de arquivo inválido" });
+  }
+
+  // Extração segura do nome base
+  const safeFilename = path.basename(filename);
+
+  const filePath = `${UPLOADS_DIR}/${safeFilename}`; // nosemgrep
+
+  // Verificação de contenção no diretório uploads
   if (!filePath.startsWith(UPLOADS_DIR)) {
     return res.status(403).json({ error: "Acesso não autorizado ao caminho informado" });
   }

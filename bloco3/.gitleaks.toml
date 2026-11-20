@@ -1,0 +1,15 @@
+title = "Gitleaks - configuracao do projeto"
+
+# Mantem todas as regras padrao do Gitleaks e acrescenta as regras abaixo
+[extend]
+useDefault = true
+
+# As regras padrao nao detectam segredos "humanos" (frases sem entropia) nem as
+# chaves de exemplo da AWS. Esta regra pega qualquer atribuicao literal a uma
+# variavel com nome de segredo, ex.: JWT_SECRET: "valor" ou API_KEY = 'valor'.
+[[rules]]
+id = "hardcoded-named-secret"
+description = "Valor literal atribuido a variavel com nome de segredo (SECRET, PASSWORD, TOKEN, *_KEY)"
+regex = '''(?i)\b[a-z0-9_]*(?:secret|passw(?:or)?d|token|api_key|access_key(?:_id)?|private_key)[a-z0-9_]*\b["']?\s*[:=]\s*["']([^"'\s]{8,})["']'''
+secretGroup = 1
+keywords = ["secret", "passw", "token", "api_key", "access_key", "private_key"]

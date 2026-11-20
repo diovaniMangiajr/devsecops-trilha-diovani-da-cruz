@@ -9,6 +9,9 @@ const filesRouter = require("./routes/files");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Não revela o framework usado no cabeçalho "X-Powered-By" das respostas
+app.disable("x-powered-by");
+
 app.use(express.json());
 
 // Healthcheck - usado pelo Render para saber se a aplicação está no ar.

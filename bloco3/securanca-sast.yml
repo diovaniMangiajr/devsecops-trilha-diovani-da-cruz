@@ -1,0 +1,143 @@
+name: Segurança & CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+# Menor privilegio: os jobs so precisam ler o repositorio
+permissions:
+  contents: read
+
+env:
+  APP_DIR: bloco3/app-student
+  # Ferramentas fixadas por versao + digest (a tag pode ser movida, o digest nao)
+  SEMGREP_IMAGE: returntocorp/semgrep:1.185.0@sha256:67518c174185a2043fdbed16c70631b79209499b3671178e7194379b48295a0d
+  TRIVY_IMAGE: aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
+  GITLEAKS_IMAGE: zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+
+jobs:
+  build:
+    name: Build & Validação
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validar Build da Imagem Docker
+        run: docker build -t task-api "./${APP_DIR}"
+
+  sast-semgrep:
+    name: SAST Gate (Semgrep)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Executar Semgrep SAST
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/src" "${SEMGREP_IMAGE}" \
+            semgrep scan --config auto --error "/src/${APP_DIR}"
+
+  sca-trivy:
+    name: SCA Gate (Trivy - dependências)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Escanear dependências (package-lock.json)
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/src" "${TRIVY_IMAGE}" \
+            fs --scanners vuln --severity HIGH,CRITICAL --exit-code 1 --no-progress \
+            "/src/${APP_DIR}"
+
+  image-trivy:
+    name: Container Gate (Trivy - imagem)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout do Repositório
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Construir a imagem
+        run: docker build -t "task-api:${GITHUB_SHA}" "./${APP_DIR}"
+
+      - name: Escanear a imagem Docker
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "${TRIVY_IMAGE}" \
+            image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 --no-progress \
+            "task-api:${GITHUB_SHA}"
+
+  secrets-gitleaks:
+    name: Secrets Gate (Gitleaks)
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout do Repositório (histórico completo)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detectar segredos no código e no histórico
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" -v "${{ github.workspace }}:/repo" "${GITLEAKS_IMAGE}" \
+            git /repo \
+            --config /repo/bloco3/.gitleaks.toml \
+            --gitleaks-ignore-path /repo/bloco3/.gitleaksignore \
+            --redact --verbose
+
+  deploy:
+    name: Deploy (Render)
+    runs-on: ubuntu-latest
+    needs: [ sast-semgrep, sca-trivy, image-trivy, secrets-gitleaks ]
+    # Somente em push/merge na main, e somente depois de todos os gates passarem
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    concurrency:
+      group: deploy-render
+      cancel-in-progress: false
+    timeout-minutes: 25
+    steps:
+      - name: Disparar o deploy do commit aprovado
+        env:
+          DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "${DEPLOY_HOOK}" ]; then
+            echo "::error::Secret RENDER_DEPLOY_HOOK_URL nao configurado"
+            exit 1
+          fi
+          curl -fsS -X POST -o /dev/null "${DEPLOY_HOOK}&ref=${GITHUB_SHA}"
+          echo "Deploy solicitado para o commit ${GITHUB_SHA}"
+
+      - name: Aguardar a nova versão no ar
+        env:
+          APP_URL: ${{ vars.RENDER_APP_URL }}
+        run: |
+          if [ -z "${APP_URL}" ]; then
+            echo "::error::Variavel RENDER_APP_URL nao configurada"
+            exit 1
+          fi
+          # Plano gratuito: build no Render + "cold start" podem levar varios minutos
+          for i in $(seq 1 60); do
+            commit=$(curl -fsS --max-time 60 "${APP_URL}/health" | jq -r '.commit // empty' || true)
+            if [ "${commit}" = "${GITHUB_SHA}" ]; then
+              echo "Versao ${GITHUB_SHA} publicada e respondendo em ${APP_URL}"
+              exit 0
+            fi
+            echo "Tentativa ${i}/60: versao no ar '${commit:-indisponivel}', aguardando..."
+            sleep 15
+          done
+          echo "::error::A nova versao nao ficou disponivel a tempo"
+          exit 1

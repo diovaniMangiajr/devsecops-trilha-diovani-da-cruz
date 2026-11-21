@@ -1,0 +1,14 @@
+# Achados historicos aceitos (formato: commit:arquivo:regra:linha)
+#
+# Commit 51cf12b (app do bloco 2) trouxe JWT_SECRET, AWS_ACCESS_KEY_ID e
+# AWS_SECRET_ACCESS_KEY escritos direto em src/config.js. Os valores foram
+# removidos do codigo no commit 9371d50 e passaram a vir de variaveis de
+# ambiente. Como continuam visiveis no historico, foram considerados vazados
+# e rotacionados: os valores novos existem apenas como variaveis de ambiente
+# no Render e nunca foram versionados.
+#
+# Somente estas tres ocorrencias exatas sao aceitas. Qualquer segredo novo,
+# em qualquer arquivo ou commit, continua quebrando o pipeline.
+51cf12b5da47db0533b75b7feb257f22a965a245:bloco2/app-student/src/config.js:hardcoded-named-secret:2
+51cf12b5da47db0533b75b7feb257f22a965a245:bloco2/app-student/src/config.js:hardcoded-named-secret:3
+51cf12b5da47db0533b75b7feb257f22a965a245:bloco2/app-student/src/config.js:hardcoded-named-secret:4
